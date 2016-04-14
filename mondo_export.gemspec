@@ -26,6 +26,7 @@ Gem::Specification.new do |spec|
   spec.executables   = ["mondox"]
   spec.require_paths = ["lib"]
 
+  spec.add_dependency "activesupport", "~> 4.0.0"
   spec.add_dependency "bundler", "~> 1.11"
   spec.add_dependency "mondo", "~> 0.5.0"
 
