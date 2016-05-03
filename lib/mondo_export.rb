@@ -7,6 +7,9 @@ require "logger"
 module MondoExport
   class MondoExport
     LOGGER = Logger.new(STDOUT)
+    DEFAULT_OPTIONS = {
+      since: Date.today,
+    }
 
     def call
       options = parse_options
@@ -15,6 +18,7 @@ module MondoExport
       mondo = Mondo::Client.new(token: options[:token])
       mondo.ping
       LOGGER.info "Successfully authenticated to Mondo"
+      LOGGER.debug "Fetching transactions since #{options[:since]}"
       transactions = mondo.transactions(
         since: options[:since].strftime("%Y-%m-%d"),
         limit: 100,
@@ -39,7 +43,8 @@ module MondoExport
           options[:verbose] = v
         end
       end.parse!
-      options
+
+      DEFAULT_OPTIONS.merge(options)
     end
   end
 end
