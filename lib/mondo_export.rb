@@ -1,3 +1,4 @@
+require "csv"
 require "mondo"
 require "mondo_export/version"
 require "optparse"
@@ -10,6 +11,14 @@ module MondoExport
     DEFAULT_OPTIONS = {
       since: Date.today,
     }
+    CSV_HEADERS = {
+      id: 'ID',
+      merchant: 'PAYEE',
+      created: 'DATE',
+      amount: 'AMOUNT',
+      description: 'DESCRIPTION',
+      notes: 'NOTE',
+    }
 
     def call
       options = parse_options
@@ -20,13 +29,37 @@ module MondoExport
       LOGGER.info "Successfully authenticated to Mondo"
       LOGGER.debug "Fetching transactions since #{options[:since]}"
       transactions = mondo.transactions(
+        expand: [:merchant],
         since: options[:since].strftime("%Y-%m-%d"),
         limit: 100,
       )
       LOGGER.info "Fetched #{transactions.count} transactions"
+      csv = []
+      csv << CSV_HEADERS.values
+      csv.concat transactions.map { |t| transaction_to_csv_entry(t).values }
+      output_filename = "#{Date.today}-mondo-export.csv"
+      File.open(output_filename, "w") do |file|
+        csv.map.with_index do |l, i|
+          LOGGER.debug "#{i} | #{l.to_csv.strip}"
+          file.write l.to_csv
+        end
+      end
+      LOGGER.info "Wrote output in #{output_filename}"
     end
 
     private
+
+    def transaction_to_csv_entry(transaction)
+      merchant = transaction.merchant ? transaction.merchant.name : nil
+      {
+        id: transaction.id,
+        created: transaction.created.strftime("%Y-%m-%d"),
+        merchant: merchant,
+        amount: transaction.amount.to_s,
+        description: transaction.description,
+        notes: transaction.notes,
+      }
+    end
 
     def parse_options
       options = {
