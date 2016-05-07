@@ -13,9 +13,11 @@ module MondoExport
     }
     CSV_HEADERS = {
       id: 'ID',
+      date: 'DATE',
+      time: 'TIME',
       merchant: 'PAYEE',
-      created: 'DATE',
       amount: 'AMOUNT',
+      balance: 'BALANCE',
       description: 'DESCRIPTION',
       notes: 'NOTE',
     }
@@ -27,13 +29,11 @@ module MondoExport
       mondo = Mondo::Client.new(token: options[:token])
       mondo.ping
       LOGGER.info "Successfully authenticated to Mondo"
-      LOGGER.debug "Fetching transactions since #{options[:since]}"
-      transactions = mondo.transactions(
-        expand: [:merchant],
-        since: options[:since].strftime("%Y-%m-%d"),
-        limit: 100,
+      transactions = fetch_transactions_from_mondo(
+        client: mondo,
+        since: options[:since]
       )
-      LOGGER.info "Fetched #{transactions.count} transactions"
+      LOGGER.info "Completed fetch with #{transactions.count} transactions"
       csv = []
       csv << CSV_HEADERS.values
       csv.concat transactions.map { |t| transaction_to_csv_entry(t).values }
@@ -49,13 +49,34 @@ module MondoExport
 
     private
 
+    def fetch_transactions_from_mondo(client:, since:, acc: [])
+      LOGGER.debug "Fetching transactions since #{since}"
+      transactions = client.transactions(
+        expand: [:merchant],
+        since: since.strftime("%Y-%m-%d"),
+        limit: 100,
+      )
+      LOGGER.debug "Fetched #{transactions.count} transactions"
+      if (transactions.count < 100)
+        acc + transactions
+      else
+        fetch_transactions_from_mondo(
+          client: client,
+          since: transactions.last.created,
+          acc: acc + transactions
+        )
+      end
+    end
+
     def transaction_to_csv_entry(transaction)
       merchant = transaction.merchant ? transaction.merchant.name : nil
       {
         id: transaction.id,
-        created: transaction.created.strftime("%Y-%m-%d"),
+        date: transaction.created.strftime("%Y-%m-%d"),
+        time: transaction.created,
         merchant: merchant,
         amount: transaction.amount.to_s,
+        balance: transaction.account_balance.to_s,
         description: transaction.description,
         notes: transaction.notes,
       }
